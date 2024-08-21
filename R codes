@@ -1,0 +1,107 @@
+options(scipen = 999)
+# Read the data
+library(readr)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(car)
+library(MASS)
+library(glmnet)
+library(plotly)
+library(corrplot)
+library(ggcorrplot)
+library(caret)
+library(reshape2)
+library(knitr)
+
+rdata <- read_excel("\\\\fileshare\\CARPROOF\\FP&A\\Pricing\\Catalyst Analysis - DesRosier - VIO\\data for insurance.xlsx")
+print(rdata)
+
+# Line charts with time
+ggplot(rdata, aes(x = Year, y = `Government Volumes`)) +
+  geom_line() +
+  ggtitle("Government Volumes Over Years") +
+  xlab("Year") +
+  ylab("Government Volumes")
+
+ggplot(rdata, aes(x = Year, y = `Insurance volumes`)) +
+  geom_line() +
+  ggtitle("Insurance Volumes Over Years") +
+  xlab("Year") +
+  ylab("Insurance Volumes")
+
+ggplot(rdata, aes(x = Year, y = `Finance and insurance`)) +
+  geom_line() +
+  ggtitle("Finance and Insurance Over Years") +
+  xlab("Year") +
+  ylab("Finance and Insurance")
+
+ggplot(rdata, aes(x = Year, y = `COMMERCIAL LEASE`)) +
+  geom_line() +
+  ggtitle("Commercial Lease Over Years") +
+  xlab("Year") +
+  ylab("Commercial Lease")
+
+ggplot(rdata, aes(x = Year, y = `MANUFACTURER LEASE`)) +
+  geom_line() +
+  ggtitle("Manufacturer Lease Over Years") +
+  xlab("Year") +
+  ylab("Manufacturer Lease")
+
+#Corr
+data_filtered <- rdata[, !names(rdata) %in% c(
+  "Credit intermediation and monetary authorities",
+  "Depository credit intermediation and monetary authorities",
+  "Local credit unions",
+  "Banking, monetary authorities and other depository credit intermediation",
+  "Agencies, brokerages and other insurance related activities",
+  "Financial investment services, funds and other financial vehicles",
+  "Insurance carriers and related activities"
+)]
+data_for_corr_filtered <- data_filtered[, -which(names(data_filtered) == "Year")]
+correlation_matrix_filtered <- cor(data_for_corr_filtered, use = "complete.obs")
+ggcorrplot(correlation_matrix_filtered, method = "square", 
+           type = "lower", lab = TRUE, lab_size = 3, 
+           title = "Correlation Matrix", 
+           colors = c("blue", "white", "red"))
+
+rdata$`Leasing Rate` <- rdata$`Leasing Rate` * 10000
+#Lasso Regression for Government volumes
+X <- model.matrix(`Government Volumes` ~ 
+                    `Finance and insurance` +
+                    `Credit intermediation and monetary authorities` +
+                    `Depository credit intermediation and monetary authorities` +
+                    `Local credit unions` +
+                    `Banking, monetary authorities and other depository credit intermediation` +
+                    `Automotive equipment rental and leasing` +
+                    `Insurance carriers` +
+                    `Agencies, brokerages and other insurance related activities` +
+                    `Financial investment services, funds and other financial vehicles` +
+                    `COMMERCIAL LEASE` +
+                    `DEALER LEASE` +
+                    `MANUFACTURER LEASE` +
+                    `RETAIL LEASE`+
+                    `Leasing Rate`, 
+                  data = rdata)[,-1] 
+y <- rdata$`Government Volumes`
+lasso_cv <- cv.glmnet(X, y, alpha = 1)
+optimal_lambda <- lasso_cv$lambda.min
+lasso_model <- glmnet(X, y, alpha = 1, lambda = optimal_lambda)
+coef(lasso_model)
+
+lasso_coeffs <- as.data.frame(as.matrix(coef(lasso_model)))
+lasso_coeffs <- lasso_coeffs[lasso_coeffs$s0 != 0, , drop = FALSE]
+colnames(lasso_coeffs) <- c("Coefficient")
+kable(lasso_coeffs, caption = "LASSO Regression Coefficients")
+
+# Model Accuracy
+predictions <- predict(lasso_model, s = optimal_lambda, newx = X)
+mse <- mean((predictions - y)^2)
+sst <- sum((y - mean(y))^2)
+sse <- sum((predictions - y)^2)
+r_squared <- 1 - (sse / sst)
+r_squared
+
+
+
