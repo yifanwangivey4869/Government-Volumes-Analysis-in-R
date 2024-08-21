@@ -15,7 +15,7 @@ library(caret)
 library(reshape2)
 library(knitr)
 
-rdata <- read_excel("\\\\fileshare\\CARPROOF\\FP&A\\Pricing\\Catalyst Analysis - DesRosier - VIO\\data for insurance.xlsx")
+rdata <- read_excel("data for insurance.xlsx")
 print(rdata)
 
 # Line charts with time
